@@ -139,8 +139,8 @@ var londonBusStops = (function () {
 
             // Get data
             return {
-                LineName: a[1],
-                Towards: a[2],
+                LineName: a[2],
+                Towards: a[1],
                 DestinationName: a[3],
                 EstimatedTime: new Date(a[4])
             };
@@ -224,7 +224,7 @@ $(function () {
 						var newTime = convTime.substring(0, convTime.length-3);
 					
                         // Create HTML
-                        var htmlContent = "<h4> - " + info[i].LineName + " (Towards: " + info[i].Towards + ")</h4>";
+                        var htmlContent = "<h4>" + info[i].LineName + "<br/>Towards: " + info[i].Towards + "</h4>";
                         htmlContent += "<p><strong>Destination: </strong> " + info[i].DestinationName + "<br />";
                         htmlContent += "<strong>Estimated time: </strong> " + newTime + " (" + info[i].EstimatedTime.toLocaleTimeString() + ")</p>";
 
