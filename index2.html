@@ -1,0 +1,286 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+<meta charset=utf-8 />
+<title>London BUS-checker</title>
+<meta name='viewport' content='initial-scale=1,maximum-scale=1,user-scalable=no' />
+<script src='http://ajax.aspnetcdn.com/ajax/jQuery/jquery-2.1.1.min.js'></script>
+<script src='https://api.tiles.mapbox.com/mapbox.js/v2.0.1/mapbox.js'></script>
+<link href='https://api.tiles.mapbox.com/mapbox.js/v2.0.1/mapbox.css' rel='stylesheet' />
+<style>
+  body { margin:0; padding:0; font-family: Arial; }
+  #map { position:absolute; top:0; bottom:0; width:100%; }
+  .overlay { position: fixed; top: 0; right: 0; width: 100%; height: 100%; background: rgba(0,0,0,.5);}
+  .overlay > div { position: fixed; top: 0; right: 0; width: 20%; height: 100%; background: rgba(0,0,0,.95); text-align: left; padding: 0 2%; color: #fff; overflow-y: auto;}
+  .ajaxloader { position: absolute; top: 50%; left: 50%; margin: -16px 0 0 -16px; width: 32px; height: 32px; }
+  h4 {margin-bottom: 5px;}
+  p {margin: 0 0 8px; font-size: 14px; border-bottom: 1px solid gray; padding-bottom: 15px;}
+</style>
+</head>
+<body>
+
+<div id='map'></div>
+
+<script>
+
+var londonBusStops = (function () {
+
+    // Docs:
+    // https://www.tfl.gov.uk/cdn/static/cms/documents/tfl-live-bus-and-river-bus-arrivals-api-documentation.pdf
+    // https://developer.mozilla.org/en-US/docs/Web/Guide/API/DOM/Storage
+
+    // Downloads list of bus stops
+    var downloadStops = function () {
+        // Return with AJAX promise
+        return $.ajax({
+            dataType: "text",
+            url: "http://countdown.api.tfl.gov.uk/interfaces/ura/instant_V1?ReturnList=StopPointName,StopID,Latitude,Longitude"
+        });
+    };
+
+    // Creates a geo JSON array from stop list
+    var parseStopsToGeoJson = function (stopsResult) {
+        // Split lines
+        var lines = stopsResult.split('\n');
+        // Remove first line
+        lines.splice(0, 1);
+
+        // Parse each line
+        var result = lines.map(function (l) {
+            // Get JSON array
+            var a = JSON.parse(l);
+
+            // Get data
+            var stopPointName = a[1];
+            var stopID = a[2];
+            var latitude = a[3];
+            var longitude = a[4];
+
+            // Return geo JSON item
+            var item = {
+                type: "Feature",
+                geometry: {
+                    coordinates: [ longitude, latitude ],
+                    type: "Point"
+                },
+                properties: {
+                    title: stopPointName,
+                    description: "Click here for more info",
+                    stopID: stopID,
+                    "marker-color": "#e10c06",
+					"marker-size": "small",
+					"marker-symbol": "bus"
+                }
+            };
+
+            return item;
+        });
+
+        return result;
+    };
+
+    // Gets bus stops as geo JSON
+    var getStopsAsGeoJson = function () {
+        // Create new promise (we'll return this)
+        var deferred = new $.Deferred();
+
+        var data = localStorage.getItem("LondonBusStops");
+        if (data) {
+            // We have it in local storage!
+            var geoJson = parseStopsToGeoJson(data);
+            deferred.resolve(geoJson);
+        }
+        else {
+            // Download stops
+            downloadStops()
+                .done(function (data) {
+                    localStorage.setItem("LondonBusStops", data);
+                    // Convert result to geo JSON
+                    var geoJson = parseStopsToGeoJson(data);
+
+                    // Resolve promise
+                    deferred.resolve(geoJson);
+                })
+                .fail(function () {
+                    // Reject promise
+                    deferred.reject();
+                });
+        }
+
+        // Return promise
+        return deferred;
+    };
+
+    // Downloads stuff for a given bus stop
+    var downloadInfoForStop = function (stopID) {
+        // Create URL
+        var url = "http://countdown.api.tfl.gov.uk/interfaces/ura/instant_V1";
+        url += "?ReturnList=LineName,Towards,DestinationName,EstimatedTime";
+        url += "&StopID=" + String(stopID);
+
+        // Return AJAX promise
+        return $.ajax({
+            dataType: "text",
+            url: url
+        });
+    };
+
+    // Parses information downloaded for a stop
+    var parseInfoForStop = function (resultString) {
+        // Split lines
+        var lines = resultString.split('\n');
+        // Remove first line
+        lines.splice(0, 1);
+
+        // Parse each line
+        var result = lines.map(function (l) {
+            // Get JSON array
+            var a = JSON.parse(l);
+
+            // Get data
+            return {
+                LineName: a[1],
+                Towards: a[2],
+                DestinationName: a[3],
+                EstimatedTime: new Date(a[4])
+            };
+        });
+
+        return result;
+    };
+
+    // Gets stop info
+    var getStopInfo = function (stopID) {
+        // Create promise
+        var deferred = new $.Deferred();
+
+        // Download info
+        downloadInfoForStop(stopID)
+            .done(function (data) {
+                // Parse data
+                var info = parseInfoForStop(data);
+                // Resolve promise
+                deferred.resolve(info);
+            })
+            .fail(function () {
+                // Reject the promise
+                deferred.reject();
+            });
+
+        // Return promise
+        return deferred;
+    };
+
+    return {
+        getStopsAsGeoJson: getStopsAsGeoJson,
+        getStopInfo: getStopInfo
+    };
+
+})();
+
+$(function () {
+    var $document = $(document);
+    var $body = $("body");
+
+    // Ajax loader
+    var $ajaxLoader = $("<div class='overlay'><div class='ajaxloader'><img src='ajax-loader.gif' /></div>");
+    $document
+        .ajaxSend(function () {
+            $ajaxLoader.appendTo($body);
+        })
+        .ajaxComplete(function () {
+            $ajaxLoader.detach();
+        });
+
+
+    // Set up mapbox token
+    L.mapbox.accessToken = 'pk.eyJ1IjoibGV2aXBhZHJlIiwiYSI6IkJwMTE5SDAifQ.7HDSEJrVzl30aKBDVuXkww';
+    // Create map
+    var map = L.mapbox.map('map', 'levipadre.j8fgmbd1');
+
+    // This function will be called when the user clicks on a marker
+    var itemClickFunc = function(e) {
+        // Find data of clicked item
+        var stopID = e.layer.feature.properties.stopID;
+        var title = e.layer.feature.properties.title;
+		// Local time
+		var d = new Date();
+
+        // Fetch data for this bus stop
+        londonBusStops.getStopInfo(stopID)
+            .done(function (info) {
+                // Create container item
+                var $div = $(document.createElement("div"))
+                    .html("<h2>" + title + "</h2>");
+
+                if (info.length > 0) {
+                    // Go through all info
+                    for (var i = 0; i < info.length; i++) {
+						// Local time
+						var est = new Date(info[i].EstimatedTime);
+						var timeDiff = Math.abs(est - d);
+						var time = new Date(timeDiff);
+						var convTime = time.toLocaleTimeString();
+						var newTime = convTime.substring(0, convTime.length-3);
+					
+                        // Create HTML
+                        var htmlContent = "<h4> - " + info[i].LineName + " (Towards: " + info[i].Towards + ")</h4>";
+                        htmlContent += "<p><strong>Destination: </strong> " + info[i].DestinationName + "<br />";
+                        htmlContent += "<strong>Estimated time: </strong> " + newTime + " (" + info[i].EstimatedTime.toLocaleTimeString() + ")</p>";
+
+                        // Create list item
+                        $(document.createElement("div"))
+                            .html(htmlContent)
+                            .appendTo($div);
+                    }
+                }
+                else {
+                    $div.append("<p>There are no buses.</p>");
+                }
+				
+				map.panTo(e.layer.getLatLng());
+				e.layer.openPopup();
+				
+                // Create overlay
+                var $overlay = $(document.createElement("div"))
+                    .addClass("overlay")
+                    .append($div)
+                    .appendTo($body)
+                    .on("click", function () {
+                        $overlay.remove();
+                    });
+            })
+            .fail (function () {
+                alert("Something bad happened, could not download info for selected bus stop.");
+            });
+    };
+
+    // Fetch bus stops data
+    londonBusStops.getStopsAsGeoJson()
+        .done(function (geoJson) {
+            var i = 0;
+            var addMoreMarkers = function () {
+                var portion = geoJson.slice(i, i += 10);
+                var featureLayer = L.mapbox.featureLayer(portion).addTo(map);
+                featureLayer.on('mouseover', function(e) {
+                    e.layer.openPopup();
+                });
+                featureLayer.on('mouseout', function(e) {
+                    e.layer.closePopup();
+                });
+                featureLayer.on('click', itemClickFunc);
+
+                if (i < geoJson.length) {
+                    setTimeout(function () { addMoreMarkers(); }, 100);
+                }
+            };
+
+            addMoreMarkers();
+        })
+        .fail(function () {
+            alert("Something bad happened, could not download bus stops.");
+        });
+});
+</script>
+</body>
+</html>

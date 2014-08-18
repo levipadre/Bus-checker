@@ -1,0 +1,115 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+<meta charset=utf-8 />
+<title>London BUS-checker</title>
+<meta name='viewport' content='initial-scale=1,maximum-scale=1,user-scalable=no' />
+<script src='https://api.tiles.mapbox.com/mapbox.js/v2.0.1/mapbox.js'></script>
+<link href='https://api.tiles.mapbox.com/mapbox.js/v2.0.1/mapbox.css' rel='stylesheet' />
+<style>
+  body { margin:0; padding:0; }
+  #map { position:absolute; top:0; bottom:0; width:100%; }
+  .custom-popup .leaflet-popup-content-wrapper {
+  background:#e10c06;
+  color:#fff;
+  font-size:12px;
+  line-height:14px;
+  position: relative;
+  padding: 2px;
+  top: -5px;
+  }
+  .custom-popup .leaflet-popup-content {
+	padding: 5px 5px 8px;
+	margin: 0;
+	line-height: inherit;
+	}
+.custom-popup .leaflet-popup-content-wrapper a {
+  color:rgba(255,255,255,0.5);
+  }
+.custom-popup .leaflet-popup-tip-container {
+  width:20px;
+  height:10px;
+  position: relative;
+  top: -5px;
+  }
+.custom-popup .leaflet-popup-tip {
+  border-left:10px solid transparent;
+  border-right:10px solid transparent;
+  border-top: 10px solid #e10c06;
+  }
+</style>
+</head>
+<body>
+
+<div class='custom-popup' id='map'></div>
+
+<script>
+L.mapbox.accessToken = 'pk.eyJ1IjoibGV2aXBhZHJlIiwiYSI6IkJwMTE5SDAifQ.7HDSEJrVzl30aKBDVuXkww';
+var map = L.mapbox.map('map', 'levipadre.j8fgmbd1');
+var layers = {
+  Streets: L.mapbox.tileLayer('levipadre.j8fgmbd1'),
+  Satellite: L.mapbox.tileLayer('examples.map-igb471ik')
+};
+
+var geojson = [
+    {
+      "type": "Feature",
+      "geometry": {
+        "coordinates": [
+			-0.13243675231933594,
+			51.50826167077801
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "title": "Bus station name 1",
+		"description": "129 - 3 min.<br/>420 - 2 min.<br/>234 - 1 min.",
+        "marker-color": "#e10c06",
+        "marker-size": "small",
+        "marker-symbol": "bus"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "coordinates": [
+			-0.1307201385498047,
+			51.50008749807709
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "title": "Bus station name 2",
+		"description": "12 - Not in service.<br/>369 - 2 min.",
+        "marker-color": "#e10c06",
+        "marker-size": "small",
+        "marker-symbol": "bus"
+      }
+    }
+];
+
+var markers = L.mapbox.featureLayer()
+    .setGeoJSON(geojson)
+    .addTo(map);
+
+markers.setGeoJSON(geojson);
+
+markers.on('click', function(e) {
+	map.panTo(e.layer.getLatLng());
+	e.layer.openPopup();
+    //console.log(e.layer);
+	//console.log("Nev: " + e.layer.feature.properties.title);
+});
+
+L.control.layers(layers).addTo(map);
+
+/*markers.on('mouseover', function(e) {
+    e.layer.openPopup();
+});
+markers.on('mouseout', function(e) {
+    e.layer.closePopup();
+});*/
+	
+</script>
+</body>
+</html>
